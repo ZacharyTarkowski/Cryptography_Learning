@@ -1,0 +1,22 @@
+{
+    "configurations": [
+        {
+            "name": "Task_1",
+            "includePath": [
+                "${workspaceFolder}/**"
+            ],
+            "defines": [
+                "_DEBUG",
+            ],
+            "compilerPath": "C:/cygwin64/bin/gcc.exe",
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "gcc-x64",
+            "compilerArgs": [
+                //"-mthumb"
+            ],
+            "C_Cpp.autocompleteAddParentheses": true
+        }
+    ],
+    "version": 4
+}
