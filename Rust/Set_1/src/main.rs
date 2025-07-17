@@ -7,6 +7,8 @@ use std::sync::OnceLock;
 use std::fs::File;
 use std::io::{self, prelude::*, BufReader};
 
+
+
 const BASE64_MASK_1  : u8 = 0xFC;
 const BASE64_MASK_2_1: u8 = 0x03;
 const BASE64_MASK_2_2: u8 = 0xF0;
@@ -278,26 +280,193 @@ fn challenge_4()
     
 }
 
-fn repeating_key_xor(key : &[u8])
+fn repeating_key_xor(key : &[u8], data : &[u8], out : &mut [u8])
 {
+    assert!(data.len() <= out.len() && key.len() <= data.len());
 
+    let mut key_iter = 0;
+    for i in 0..data.len()
+    {
+        out[i] = data[i] ^ key[key_iter];
+
+        key_iter += 1;
+        if key_iter >= key.len()
+        {
+            key_iter = 0;
+        }
+    }
 }
 
 fn challenge_5()
 {
     let key = b"ICE";
+    let data = "Burning 'em, if you ain't quick and nimble\nI go crazy when I hear a cymbal";
+    let mut out: Vec<u8> = vec![0; data.len()];
+
+    repeating_key_xor(key, data.as_bytes(), out.as_mut_slice());
+    println!("{:x?}", out);
+}
+
+
+fn count_ones(in1 : u8) -> u32
+{
+    let mut count = 0;
+
+    for i in 0..8
+    {
+        let mask = (1<<i);
+        let in_anded = in1 & mask;
+        if in_anded != 0
+        {
+            count +=1;
+        }
+    }
+
+    return count;
+}
+
+fn hamming_distance(in1 : &[u8], in2 : &[u8]) -> u32
+{
+    assert!(in1.len() == in2.len());
+
+    let mut dist = 0;
+    for i in 0..in1.len()
+    {
+        dist += count_ones(in1[i] ^ in2[i]);
+    }
+
+    return dist;
+}
+
+fn base64_decode_map() -> &'static HashMap<u8 , u8> {
+    static HASHMAP: OnceLock<HashMap<u8, u8>> = OnceLock::new();
+    HASHMAP.get_or_init(|| {
+    let mut m = HashMap::new();
+    m.insert(b'A', 0 );
+    m.insert(b'B', 1 );
+    m.insert(b'C', 2 );
+    m.insert(b'D', 3 );
+    m.insert(b'E', 4 );
+    m.insert(b'F', 5 );
+    m.insert(b'G', 6 );
+    m.insert(b'H', 7 );
+    m.insert(b'I', 8 );
+    m.insert(b'J', 9 );
+    m.insert(b'K', 10);
+    m.insert(b'L', 11);
+    m.insert(b'M', 12);
+    m.insert(b'N', 13);
+    m.insert(b'O', 14);
+    m.insert(b'P', 15);
+    m.insert(b'Q', 16); 
+    m.insert(b'R', 17); 
+    m.insert(b'S', 18); 
+    m.insert(b'T', 19); 
+    m.insert(b'U', 20); 
+    m.insert(b'V', 21); 
+    m.insert(b'W', 22); 
+    m.insert(b'X', 23); 
+    m.insert(b'Y', 24); 
+    m.insert(b'Z', 25); 
+    m.insert(b'a', 26); 
+    m.insert(b'b', 27); 
+    m.insert(b'c', 28); 
+    m.insert(b'd', 29); 
+    m.insert(b'e', 30); 
+    m.insert(b'f', 31); 
+    m.insert(b'g', 32); 
+    m.insert(b'h', 33); 
+    m.insert(b'i', 34); 
+    m.insert(b'j', 35); 
+    m.insert(b'k', 36); 
+    m.insert(b'l', 37); 
+    m.insert(b'm', 38); 
+    m.insert(b'n', 39); 
+    m.insert(b'o', 40); 
+    m.insert(b'p', 41); 
+    m.insert(b'q', 42); 
+    m.insert(b'r', 43); 
+    m.insert(b's', 44); 
+    m.insert(b't', 45); 
+    m.insert(b'u', 46); 
+    m.insert(b'v', 47); 
+    m.insert(b'w', 48); 
+    m.insert(b'x', 49); 
+    m.insert(b'y', 50); 
+    m.insert(b'z', 51); 
+    m.insert(b'0', 52); 
+    m.insert(b'1', 53); 
+    m.insert(b'2', 54); 
+    m.insert(b'3', 55); 
+    m.insert(b'4', 56); 
+    m.insert(b'5', 57); 
+    m.insert(b'6', 58); 
+    m.insert(b'7', 59); 
+    m.insert(b'8', 60); 
+    m.insert(b'9', 61); 
+    m.insert(b'+', 62); 
+    m.insert(b'/', 63); 
+        
+    return m;
+    })
+}
+
+fn from_base64(in1 : &[u8], out : &mut [u8])
+{
+    let mut in_idx = 0;
+    let mut out_idx = 0;
+
+    while in_idx < in1.len()
+    {
+        let state = in_idx & 0x3;
+
+        match state
+        {
+            0=> 
+                out[out_idx] = ( base64_decode_map().get( &in1[in_idx] ).unwrap() << 2 ) | ( base64_decode_map().get( &in1[in_idx+1] ).unwrap() >> 6 ),
+            1=> 
+                out[out_idx] = ( base64_decode_map().get( &in1[in_idx] ).unwrap() << 4 ) | ( base64_decode_map().get( &in1[in_idx+1] ).unwrap() >> 4 ),
+            2=> 
+                out[out_idx] = ( base64_decode_map().get( &in1[in_idx] ).unwrap() << 6 ) | ( base64_decode_map().get( &in1[in_idx+1] ).unwrap() ),
+            _=> (),
+        }
+        //println!("{}",state);
+
+        out_idx += 1;
+        in_idx += if state == 2 { 2 } else { 1 };;
+    }
+}
+
+fn challenge_6()
+{
+    let string1 = "this is a test";
+    let string2 = "wokka wokka!!!";
+
+    println!("{}", hamming_distance(string1.as_bytes(), string2.as_bytes()));
+
+    let file_path = "src/challenge_6_data.txt";
+
+    let data = std::fs::read_to_string(file_path).unwrap();
+    
+    
+    for keysize in 2..=40
+    {
+
+    }
 }
 
 fn main() {
 
-    challenge_1();
+    //challenge_1();
 
-    challenge_2();
+    //challenge_2();
 
-    challenge_3();
+    //challenge_3();
 
-    challenge_4();
+    //challenge_4();
 
-    challenge_5();
+    //challenge_5();
+
+    challenge_6();
     
 }
