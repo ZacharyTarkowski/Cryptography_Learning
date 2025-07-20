@@ -4,9 +4,12 @@ use std::{fmt::Write, num::ParseIntError};
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
-use std::fs::File;
-use std::io::{self, prelude::*, BufReader};
 
+
+use std::io;
+use std::io::prelude::*;
+use std::fs::File;
+use base64::prelude::*;
 
 
 const BASE64_MASK_1  : u8 = 0xFC;
@@ -257,6 +260,35 @@ fn check_single_letter_xor(challenge_string : &str)
      }
 }
 
+fn check_single_letter_xor_vec(challenge_vec : Vec<u8>) -> char
+{
+    let mut highest_score = 0;
+    let mut highest_letter: char = '0';
+    for i in 0..=127
+    {
+        let single_char_string = String::from_utf8(vec![i; challenge_vec.len()]).unwrap(); 
+
+        let mut out_vec : Vec<u8> =  vec![0; challenge_vec.len()];
+
+        arr_xor(challenge_vec.as_slice(), single_char_string.as_bytes(), out_vec.as_mut_slice() ) ;
+        let out_score = score_english(out_vec.as_slice() );
+
+        let out_str_wrapped = String::from_utf8(out_vec);
+        if out_score >= *letter_frequency_map().get(&0).unwrap() && out_str_wrapped.is_ok()
+        {
+            println!("{} {} {}", out_str_wrapped.unwrap(), out_score, i as char);
+        }
+
+        if(out_score > highest_score)
+        {
+            highest_score = out_score;
+            highest_letter = i as char;
+        }
+     }
+
+     return highest_letter;
+}
+
 fn challenge_3()
 {
     println!("Average letter frequency is {}", letter_frequency_map().get(&0).unwrap());
@@ -433,7 +465,49 @@ fn from_base64(in1 : &[u8], out : &mut [u8])
         //println!("{}",state);
 
         out_idx += 1;
-        in_idx += if state == 2 { 2 } else { 1 };;
+        in_idx += if state == 2 { 2 } else { 1 };
+    }
+}
+
+fn find_key_size(buf : &[u8], range_low : u32, range_high : u32) -> u32 {
+
+    let mut results: Vec<(f32,u32)> = Vec::new();
+    //new vector of tuples (reusult u32, keysize)
+
+    for i in range_low..range_high
+    {
+        let buf1: &[u8] = &buf[0..i as usize]; //i want this to be a pointer to the first i bytes of buf
+        let buf2: &[u8] = &buf[i as usize .. 2*i as usize]; //second i bytes of buf
+
+        let tmp_result = hamming_distance(buf1, buf2);
+        let tmp_result2 = hamming::distance(buf1, buf2);
+
+        results.push( (tmp_result as f32 / i as f32, i) );
+        //println!("{} {}", tmp_result as f32 / i as f32, i);
+    }
+
+    results.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    println!("{:?}",results);
+
+    return results[0].1;
+}
+
+fn get_transpose_block(buf : &[u8], block_size : u32, idx : u32) -> Vec<u8> {
+    let mut block: Vec<u8> = Vec::new();
+
+    for i in (idx..buf.len() as u32).step_by(block_size as usize)
+    {
+        block.push(buf[i as usize]);
+    }
+
+    return block;
+}
+
+
+fn apply_single_character_xor(buf : &mut [u8], char_to_apply : char)
+{
+    for i in buf{
+        *i = *i ^ char_to_apply as u8;
     }
 }
 
@@ -444,15 +518,48 @@ fn challenge_6()
 
     println!("{}", hamming_distance(string1.as_bytes(), string2.as_bytes()));
 
-    let file_path = "src/challenge_6_data.txt";
+    println!("{}", hamming::distance(string1.as_bytes(), string2.as_bytes()));
 
-    let data = std::fs::read_to_string(file_path).unwrap();
+    let file_path = "/home/zacht/Documents/repos/Cryptography_Learning/Rust/Set_1/src/challenge_6_data.txt";
+
+    let mut f = File::open(file_path).unwrap();
+    let mut buffer = [0; 10];
+
+    // read exactly 10 bytes
+    f.read_exact(&mut buffer).unwrap();
+    //println!("{:?}", buffer);
     
     
-    for keysize in 2..=40
+    let mut data = std::fs::read_to_string(file_path).unwrap();
+    
+    //println!("{}", data);
+    remove_whitespace(&mut data);
+    let data_vec = BASE64_STANDARD.decode(data).unwrap();
+
+    //println!("{:?}", data_vec);
+    
+    let key_size = find_key_size(data_vec.as_slice(), 2, 19);
+    let mut key_vec : Vec<u8> = Vec::new();
+
+    for i in 0..key_size
     {
-
+        let block = get_transpose_block(data_vec.as_slice(),key_size, i);
+        //println!("Block {}:\n\r{:?}",i, block);
+        key_vec.push(check_single_letter_xor_vec(block) as u8);
     }
+    println!("{:?}", key_vec.iter().map(|&b| b as char).collect::<Vec<char>>());
+
+    //let key = b"ICE";
+    //let data = "Burning 'em, if you ain't quick and nimble\nI go crazy when I hear a cymbal";
+    let mut out: Vec<u8> = vec![0; data_vec.len()];
+
+    //let debug_str = "Terminator X: Bring the noise";
+    //repeating_key_xor(debug_str.as_bytes(), data_vec.as_slice(), out.as_mut_slice());
+    //println!("{:?}", out.iter().map(|&b| b as char).collect::<Vec<char>>());
+
+    repeating_key_xor(key_vec.as_slice(), data_vec.as_slice(), out.as_mut_slice());
+    //println!("{:?}", out.iter().map(|&b| b as char).collect::<Vec<char>>());
+
 }
 
 fn main() {
